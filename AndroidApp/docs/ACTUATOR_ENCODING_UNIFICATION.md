@@ -314,3 +314,104 @@ fin = 0.3491 rad
 - معادلة `servo_set_position` نفسها — لم تتغير
 - الـ lockstep — يعمل كما كان
 - مسار الـ feedback (SRV_FB من XqpowerCan) — لم يتغير
+
+---
+
+## 9. سجل التغييرات الكامل (مرقّم)
+
+هذا السجل مبني على مقارنة مباشرة بين:
+
+- النسخة المرجعية: `/home/wd/Desktop/gab_2/Pictures/m13`
+- النسخة الحالية: `/home/wd/Desktop/gab_2/q_2/2/m13`
+
+مع استبعاد ملفات الكاش/البناء وملفات Git الداخلية.
+
+### 9.1 ملخص عددي
+
+- الملفات المعدلة المهمة: **12**
+- ملفات كود/إعدادات مضافة: **32**
+- ملفات مهمة محذوفة: **0**
+- ملفات نتائج/مخرجات تشغيل مضافة: **347**
+
+### 9.2 التغييرات المعدلة المهمة (M-xx)
+
+| ID | النوع | الملف | ملخص التغيير |
+|---|---|---|---|
+| M-01 | Non-PX4 | `6DOF_v4_pure/config/6dof_config_advanced.yaml` | تغيير `target.range_m` من `2600` إلى `3000`. |
+| M-02 | Non-PX4 | `6DOF_v4_pure/mpc/m130_mpc_autopilot.json` | تحديث مسارات `acados` و `numpy` و `code_export_directory` و `json_file` للمسار الحالي + تحديث `hash`. |
+| M-03 | Non-PX4 | `6DOF_v4_pure/sitl/mavlink_bridge.py` | إضافة تتبع حالة PX4 لكل خطوة: `px4_armed`, `px4_mode`, `step_dt_ms` مع توقيت خطوة المحاكاة. |
+| M-04 | Non-PX4 | `6DOF_v4_pure/sitl/run_sitl_test.py` | إضافة توليد تقرير HTML تفاعلي بعد كل تشغيل SITL (تحميل `sitl_html_report.py` تلقائياً). |
+| M-05 | Non-PX4 | `6DOF_v4_pure/sitl_comprehensive/m130_mhe_ocp.json` | تحديث مسارات بيئة/توليد كود + تحديث `hash`. |
+| M-06 | PX4 | `AndroidApp/app/src/main/cpp/PX4-Autopilot/src/drivers/xqpower_can/XqpowerCan.cpp` | توحيد المسار: الاعتماد على `actuator_servos` فقط للتحكم، مع drain لـ `actuator_outputs_sim`. |
+| M-07 | PX4 | `AndroidApp/app/src/main/cpp/PX4-Autopilot/src/modules/rocket_mpc/RocketMPC.cpp` | نشر `actuator_servos` (normalized) دائماً؛ ونشر `actuator_outputs_sim` (radians) فقط لدعم lockstep. |
+| M-08 | PX4 | `AndroidApp/app/src/main/cpp/generated/parameters/px4_parameters.hpp` | إضافة البارامتر `XQCAN_FB_MS` (تعريف/نوع/قيمة افتراضية). |
+| M-09 | PX4 | `AndroidApp/app/src/main/cpp/servo_usb_output.cpp` | توحيد أولوية الإدخال إلى `actuator_servos` وإلغاء استخدام `actuator_outputs_sim` للتحكم (مع drain فقط). |
+| M-10 | PX4 Tooling | `AndroidApp/app/src/main/cpp/PX4-Autopilot/.vscode/c_cpp_properties.json` | تحديث include paths من مسار قديم إلى مسار العمل الحالي. |
+| M-11 | Runtime | `6DOF_v4_pure/pil/results/pil_flight.csv` | تغير كامل في محتوى نتائج الرحلة PIL مقارنة بالنسخة المرجعية. |
+| M-12 | Runtime | `6DOF_v4_pure/pil/results/pil_timing.csv` | تغير كبير (اختزال من سجل زمني متعدد الأسطر إلى سطر واحد). |
+
+### 9.3 الملفات المضافة (A-xx)
+
+#### A) إضافات كود/إعدادات/توثيق
+
+| ID | النوع | الملف/المجلد | ملخص |
+|---|---|---|---|
+| A-01 | Non-PX4 | `6DOF_v4_pure/sitl/sitl_html_report.py` | مولّد تقرير SITL الجديد. |
+| A-02 | Non-PX4 | `6DOF_v4_pure/sitl/sitl_html_report_old_backup.py` | نسخة احتياطية من مولّد التقرير السابق. |
+| A-03 | Non-PX4 Generated | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/` | إضافة حزمة كاملة من ملفات acados المولدة (C/H/Makefile/main). |
+| A-04 | PX4 Docs | `AndroidApp/docs/ACTUATOR_ENCODING_UNIFICATION.md` | وثيقة توحيد ترميز الـ actuator (هذا الملف). |
+
+#### B) تفاصيل العناصر داخل A-03 (acados generated)
+
+| ID | المسار |
+|---|---|
+| A-03-01 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/Makefile` |
+| A-03-02 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_sim_solver_m130_mhe.c` |
+| A-03-03 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_sim_solver_m130_mhe.h` |
+| A-03-04 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_sim_solver_m130_rocket.c` |
+| A-03-05 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_sim_solver_m130_rocket.h` |
+| A-03-06 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_solver.pxd` |
+| A-03-07 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_solver_m130_mhe.c` |
+| A-03-08 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_solver_m130_mhe.h` |
+| A-03-09 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_solver_m130_rocket.c` |
+| A-03-10 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/acados_solver_m130_rocket.h` |
+| A-03-11 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost.h` |
+| A-03-12 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_0_fun.c` |
+| A-03-13 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_0_fun_jac_ut_xt.c` |
+| A-03-14 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_0_hess.c` |
+| A-03-15 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_fun.c` |
+| A-03-16 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_fun_jac_ut_xt.c` |
+| A-03-17 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_cost/m130_mhe_cost_y_hess.c` |
+| A-03-18 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_model/m130_mhe_expl_ode_fun.c` |
+| A-03-19 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_model/m130_mhe_expl_vde_adj.c` |
+| A-03-20 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_model/m130_mhe_expl_vde_forw.c` |
+| A-03-21 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_mhe_model/m130_mhe_model.h` |
+| A-03-22 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_rocket_model/m130_rocket_expl_ode_fun.c` |
+| A-03-23 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_rocket_model/m130_rocket_expl_vde_adj.c` |
+| A-03-24 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_rocket_model/m130_rocket_expl_vde_forw.c` |
+| A-03-25 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/m130_rocket_model/m130_rocket_model.h` |
+| A-03-26 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/main_m130_mhe.c` |
+| A-03-27 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/main_m130_rocket.c` |
+| A-03-28 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/main_sim_m130_mhe.c` |
+| A-03-29 | `6DOF_v4_pure/sitl_comprehensive/c_generated_code/main_sim_m130_rocket.c` |
+
+### 9.4 ملفات النتائج/المخرجات المضافة (R-xx)
+
+> هذه الملفات ناتجة عن تشغيل/اختبار وليست تغييرات منطق كود مباشرة.
+
+| ID | المدى | أمثلة |
+|---|---|---|
+| R-01 | SITL individual runs | `6DOF_v4_pure/sitl/results/sitl_*.csv` و `sitl_*_report.html` |
+| R-02 | تحليل/Plot تقارير | `6DOF_v4_pure/results/plots/analysis_*.html` |
+| R-03 | SITL comprehensive matrix | `6DOF_v4_pure/sitl_comprehensive/results/<timestamp>/*` (baseline/result/matrix/coverage) |
+
+### 9.5 الملفات المحذوفة
+
+- لا يوجد حذف لملفات مهمة مقارنة بالنسخة المرجعية.
+
+### 9.6 فهرس مرجعي سريع (للرجوع بالأرقام)
+
+- تغييرات PX4 الأساسية: **M-06, M-07, M-08, M-09, M-10, A-04**
+- تغييرات SITL/Simulation الأساسية: **M-01, M-03, M-04, A-01, A-02, A-03**
+- تغييرات مخرجات التشغيل فقط: **M-11, M-12, R-01, R-02, R-03**
+
