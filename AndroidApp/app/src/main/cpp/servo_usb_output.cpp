@@ -331,39 +331,22 @@ static void servo_output_loop() {
 
             // Priority 1 & 2: only when armed (same as XqpowerCan)
             if (is_armed) {
-                // Priority 1: Control Allocator output (actuator_servos)
+                // Priority 1: actuator_servos (normalized [-1,+1]) — the only
+                // source in both HITL and real flight since RocketMPC now always
+                // publishes normalized output.  actuator_outputs_sim (radians) is
+                // drained below to prevent stale queue growth but the value is
+                // discarded, matching the unified XqpowerCan path.
                 actuator_servos_s servos{};
                 if (servos_sub.update(&servos)) {
-                    // actuator_servos.control[] is normalized [-1,+1] from control_allocator.
-                    // Scale by XQCAN_LIMIT (not MAX_ANGLE_DEG) to match XqpowerCan's
-                    // XqpowerCan.cpp:1273 (`angle_deg = val * _angle_limit`).  Using
-                    // MAX_ANGLE_DEG=25 here while xqpower_can uses XQCAN_LIMIT=20 would
-                    // make USB servos over-deflect by 25% vs CAN servos.
                     for (int i = 0; i < 4; i++) {
                         fin_angles[i] = servos.control[i] * scaling_limit_deg;
                     }
                     has_data = true;
                 }
 
-                // Priority 2: RocketGNC direct output (actuator_outputs_sim)
-                //
-                // rocket_mpc publishes fin deflections in RADIANS on this topic
-                // (see RocketMPC.cpp sim_path branch).  Multiplying by
-                // MAX_ANGLE_DEG here would interpret them as normalized [-1,+1]
-                // and produce only ~43% of the intended deflection
-                // (SOLVER_DELTA_MAX_RAD ~= 0.349 rad, 0.349 * 25 = 8.73 deg
-                // vs the expected 20 deg).  Convert rad -> deg instead, matching
-                // the HIL branch of the XqpowerCan driver.
-                if (!has_data) {
-                    actuator_outputs_s sim_out{};
-                    if (sim_out_sub.update(&sim_out)) {
-                        constexpr float RAD2DEG = 180.0f / (float)M_PI;
-                        for (int i = 0; i < 4; i++) {
-                            fin_angles[i] = sim_out.output[i] * RAD2DEG;
-                        }
-                        has_data = true;
-                    }
-                }
+                // Drain actuator_outputs_sim queue (RocketMPC still publishes
+                // it for SimulatorMavlink lockstep; we no longer use it here).
+                { actuator_outputs_s _discard{}; sim_out_sub.update(&_discard); }
             }
 
             // Diagnostic: print status every 1 second

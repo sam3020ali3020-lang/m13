@@ -8,10 +8,10 @@
 		},
 		"paths" : 
 		{
-			"cmake" : "/home/yoga/Android/Sdk/cmake/3.22.1/bin/cmake",
-			"cpack" : "/home/yoga/Android/Sdk/cmake/3.22.1/bin/cpack",
-			"ctest" : "/home/yoga/Android/Sdk/cmake/3.22.1/bin/ctest",
-			"root" : "/home/yoga/Android/Sdk/cmake/3.22.1/share/cmake-3.22"
+			"cmake" : "/usr/bin/cmake",
+			"cpack" : "/usr/bin/cpack",
+			"ctest" : "/usr/bin/ctest",
+			"root" : "/usr/share/cmake-3.22"
 		},
 		"version" : 
 		{
@@ -19,14 +19,14 @@
 			"major" : 3,
 			"minor" : 22,
 			"patch" : 1,
-			"string" : "3.22.1-g37088a8",
-			"suffix" : "g37088a8"
+			"string" : "3.22.1",
+			"suffix" : ""
 		}
 	},
 	"objects" : 
 	[
 		{
-			"jsonFile" : "codemodel-v2-fbafd32e7cd5ad5f6bdd.json",
+			"jsonFile" : "codemodel-v2-b11dffe4396123e79a12.json",
 			"kind" : "codemodel",
 			"version" : 
 			{
@@ -35,7 +35,7 @@
 			}
 		},
 		{
-			"jsonFile" : "cache-v2-e0434a1a716b9f61af53.json",
+			"jsonFile" : "cache-v2-00a2ee2b8c0c9f111264.json",
 			"kind" : "cache",
 			"version" : 
 			{
@@ -44,7 +44,7 @@
 			}
 		},
 		{
-			"jsonFile" : "cmakeFiles-v1-a6a31e8c5ee01f87a489.json",
+			"jsonFile" : "cmakeFiles-v1-1e78a75540d828ba9725.json",
 			"kind" : "cmakeFiles",
 			"version" : 
 			{
@@ -59,7 +59,7 @@
 		{
 			"cache-v2" : 
 			{
-				"jsonFile" : "cache-v2-e0434a1a716b9f61af53.json",
+				"jsonFile" : "cache-v2-00a2ee2b8c0c9f111264.json",
 				"kind" : "cache",
 				"version" : 
 				{
@@ -69,7 +69,7 @@
 			},
 			"cmakeFiles-v1" : 
 			{
-				"jsonFile" : "cmakeFiles-v1-a6a31e8c5ee01f87a489.json",
+				"jsonFile" : "cmakeFiles-v1-1e78a75540d828ba9725.json",
 				"kind" : "cmakeFiles",
 				"version" : 
 				{
@@ -79,7 +79,7 @@
 			},
 			"codemodel-v2" : 
 			{
-				"jsonFile" : "codemodel-v2-fbafd32e7cd5ad5f6bdd.json",
+				"jsonFile" : "codemodel-v2-b11dffe4396123e79a12.json",
 				"kind" : "codemodel",
 				"version" : 
 				{

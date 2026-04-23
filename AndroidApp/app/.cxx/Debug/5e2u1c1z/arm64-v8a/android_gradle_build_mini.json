@@ -1,32 +1,32 @@
 {
   "buildFiles": [
-    "/home/yoga/m13/AndroidApp/app/src/main/cpp/CMakeLists.txt"
+    "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/src/main/cpp/CMakeLists.txt"
   ],
   "cleanCommandsComponents": [
     [
-      "/home/yoga/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "/usr/bin/ninja",
       "-C",
-      "/home/yoga/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
+      "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
       "clean"
     ]
   ],
   "buildTargetsCommandComponents": [
-    "/home/yoga/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "/usr/bin/ninja",
     "-C",
-    "/home/yoga/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
+    "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
     "{LIST_OF_TARGETS_TO_BUILD}"
   ],
   "libraries": {
     "px4phone_native::@6890427a1f51a3e7e1df": {
       "artifactName": "px4phone_native",
       "abi": "arm64-v8a",
-      "output": "/home/yoga/m13/AndroidApp/app/build/intermediates/cxx/Debug/5e2u1c1z/obj/arm64-v8a/libpx4phone_native.so",
+      "output": "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/build/intermediates/cxx/Debug/5e2u1c1z/obj/arm64-v8a/libpx4phone_native.so",
       "runtimeFiles": []
     },
     "usb1.0::@6890427a1f51a3e7e1df": {
       "artifactName": "usb1.0",
       "abi": "arm64-v8a",
-      "output": "/home/yoga/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a/libusb1.0.a",
+      "output": "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a/libusb1.0.a",
       "runtimeFiles": []
     }
   }

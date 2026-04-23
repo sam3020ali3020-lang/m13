@@ -1962,6 +1962,7 @@ enum class params : uint16_t {
 	XQCAN_NODE3,
 	XQCAN_NODE4,
 	XQCAN_REV,
+	XQCAN_FB_MS,
 
 };
 
@@ -11712,6 +11713,11 @@ static constexpr param_info_s parameters[] = {
 		.val = { .i = 0 },
 	},
 
+	{
+		.name = "XQCAN_FB_MS",
+		.val = { .i = 50 },
+	},
+
 };
 
 static constexpr param_type_t parameters_type[] = {
@@ -13665,6 +13671,7 @@ static constexpr param_type_t parameters_type[] = {
 	PARAM_TYPE_INT32, // XQCAN_NODE3
 	PARAM_TYPE_INT32, // XQCAN_NODE4
 	PARAM_TYPE_INT32, // XQCAN_REV
+	PARAM_TYPE_INT32, // XQCAN_FB_MS
 };
 
 static constexpr params parameters_volatile[] = {

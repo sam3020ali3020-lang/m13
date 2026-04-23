@@ -1,1 +1,1 @@
-/home/yoga/m13/AndroidApp/app/build/intermediates/cxx/Debug/5e2u1c1z/obj/arm64-v8a
+/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/build/intermediates/cxx/Debug/5e2u1c1z/obj/arm64-v8a

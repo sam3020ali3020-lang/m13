@@ -1,1 +1,1 @@
-/home/yoga/m13/AndroidApp/app/src/main/cpp/CMakeLists.txt
+/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/src/main/cpp/CMakeLists.txt

@@ -1227,30 +1227,35 @@ void XqpowerCan::Run()
 
 	} else if (_armed) {
 		/*
+		 * Unified single-path: actuator_servos (normalized [-1,+1]) in ALL modes.
+		 *
+		 * RocketMPC now publishes actuator_servos in both HITL and real flight.
+		 * actuator_outputs_sim (radians) is still published by RocketMPC for
+		 * SimulatorMavlink lockstep but is NO LONGER read here — removing the
+		 * dual-encoding ambiguity and making HITL/real behaviour identical.
+		 *
 		 * Priority:
-		 *   1. actuator_outputs_sim  — rocket_mpc writes fin angles here (RADIANS)
-		 *      ONLY accepted in HITL/SITL mode (_sim_mode=true). In real flight
-		 *      this topic is IGNORED even if data is present, because its
-		 *      values are in radians and would be misinterpreted, producing
-		 *      ~2.87x the intended deflection.
-		 *   2. actuator_servos       — control_allocator / rocket_mpc (NORMALIZED)
-		 *   3. actuator_outputs      — legacy PWM-style (fallback)
+		 *   1. actuator_servos  — rocket_mpc (NORMALIZED, same in HITL + real)
+		 *   2. actuator_outputs — legacy PWM-style (fallback)
 		 */
-		actuator_outputs_s sim_out;
-		bool got_sim = _sim_mode && _actuator_outputs_sim_sub.update(&sim_out);
 
-		if (got_sim) {
-			for (int i = 0; i < XQPOWER_MAX_SERVOS && i < (int)sim_out.noutputs; i++) {
-				float val = sim_out.output[i];
+		// Drain actuator_outputs_sim to avoid stale messages building up in the
+		// uORB queue (rocket_mpc still publishes it for lockstep).  We read but
+		// discard the payload.
+		{ actuator_outputs_s _discard; _actuator_outputs_sim_sub.update(&_discard); }
+
+		actuator_servos_s servos;
+
+		if (_actuator_servos_sub.update(&servos)) {
+			for (int i = 0; i < XQPOWER_MAX_SERVOS; i++) {
+				float val = servos.control[i];
 
 				if (!PX4_ISFINITE(val)) {
 					continue;
 				}
 
-				/* rocket_mpc publishes fin angles in RADIANS, not normalized [-1,+1] */
-				float angle_deg = val * (180.0f / (float)M_PI);
-				if (angle_deg > _angle_limit)  angle_deg = _angle_limit;
-				if (angle_deg < -_angle_limit) angle_deg = -_angle_limit;
+				/* actuator_servos.control[] is normalized [-1,+1]; scale to degrees */
+				float angle_deg = val * _angle_limit;
 				_cmd_deg[i] = angle_deg;
 
 				if (tx_cycle) {
@@ -1259,36 +1264,15 @@ void XqpowerCan::Run()
 			}
 
 		} else {
-			actuator_servos_s servos;
+			actuator_outputs_s outputs;
 
-			if (_actuator_servos_sub.update(&servos)) {
-				for (int i = 0; i < XQPOWER_MAX_SERVOS; i++) {
-					float val = servos.control[i];
-
-					if (!PX4_ISFINITE(val)) {
-						continue;
-					}
-
-					/* actuator_servos.control[] is normalized [-1,+1] from control_allocator */
-					float angle_deg = val * _angle_limit;
-					_cmd_deg[i] = angle_deg;
+			if (_actuator_outputs_sub.update(&outputs)) {
+				for (int i = 0; i < XQPOWER_MAX_SERVOS && i < (int)outputs.noutputs; i++) {
+					float normalized = outputs.output[i] / 500.0f - 1.0f;
+					float angle = normalized * _angle_limit;
 
 					if (tx_cycle) {
-						servo_set_position(i, angle_deg);
-					}
-				}
-
-			} else {
-				actuator_outputs_s outputs;
-
-				if (_actuator_outputs_sub.update(&outputs)) {
-					for (int i = 0; i < XQPOWER_MAX_SERVOS && i < (int)outputs.noutputs; i++) {
-						float normalized = outputs.output[i] / 500.0f - 1.0f;
-						float angle = normalized * _angle_limit;
-
-						if (tx_cycle) {
-							servo_set_position(i, angle);
-						}
+						servo_set_position(i, angle);
 					}
 				}
 			}

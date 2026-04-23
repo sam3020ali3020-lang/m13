@@ -536,6 +536,10 @@ class SITLBridge:
         self._last_controls = np.zeros(16)
         self._running = False
         self._fin_commands_rad = np.zeros(4)
+        # PX4 status tracking (from HIL_ACTUATOR_CONTROLS)
+        self._last_flags = 0   # bit-0 = ARMED
+        self._last_mode = 0
+        self._last_step_dt_ms = 0.0  # wall-clock time per sim step
 
         # History for CSV export
         self.history = {
@@ -546,6 +550,8 @@ class SITLBridge:
             'alpha': [], 'beta': [], 'mach': [],
             'accel_body': [], 'gyro_body': [],
             'lat': [], 'lon': [], 'alt_msl': [],
+            # PX4 status per step
+            'px4_armed': [], 'px4_mode': [], 'step_dt_ms': [],
         }
 
     def __del__(self):
@@ -939,7 +945,8 @@ class SITLBridge:
                 self._last_controls[3],
             ])
 
-            # Integrate one step
+            # Integrate one step (track wall-clock time per step)
+            _t_step_wall = time.monotonic()
             try:
                 next_state, snapshot, t_end, _ = sim._integrate_one_step(
                     state, t, dt, bridge_control)
@@ -948,6 +955,7 @@ class SITLBridge:
                 print(f"[BRIDGE] Simulation error at t={t:.4f}: {e}")
                 break
 
+            self._last_step_dt_ms = (time.monotonic() - _t_step_wall) * 1000.0
             sim._normalize_state(next_state, t_end)
 
             # Build sensor data
@@ -1000,6 +1008,8 @@ class SITLBridge:
                             parsed = parse_hil_actuator_controls(payload)
                             if parsed:
                                 self._last_controls = np.array(parsed['controls'])
+                                self._last_flags = parsed.get('flags', 0)
+                                self._last_mode = parsed.get('mode', 0)
                                 got_response = True
                                 if not _first_nonzero_logged and any(abs(c) > 1e-6 for c in parsed['controls'][:4]):
                                     _first_nonzero_logged = True
@@ -1017,6 +1027,8 @@ class SITLBridge:
                         parsed = parse_hil_actuator_controls(payload)
                         if parsed:
                             self._last_controls = np.array(parsed['controls'])
+                            self._last_flags = parsed.get('flags', 0)
+                            self._last_mode = parsed.get('mode', 0)
                             if not _first_nonzero_logged and any(abs(c) > 1e-6 for c in parsed['controls'][:4]):
                                 _first_nonzero_logged = True
                                 print(f"[BRIDGE] First non-zero controls at step {step} t={t:.3f}s: "
@@ -1099,6 +1111,10 @@ class SITLBridge:
         self.history['lat'].append(sensors['lat'])
         self.history['lon'].append(sensors['lon'])
         self.history['alt_msl'].append(sensors['alt'])
+        # PX4 status per step
+        self.history['px4_armed'].append(1 if (self._last_flags & 0x1) else 0)
+        self.history['px4_mode'].append(self._last_mode)
+        self.history['step_dt_ms'].append(self._last_step_dt_ms)
 
     def _export_csv(self, path: str):
         """Export flight history to CSV."""
@@ -1129,6 +1145,7 @@ class SITLBridge:
                 'force_x', 'force_y', 'force_z',
                 'accel_x', 'accel_y', 'accel_z',
                 'lat', 'lon', 'alt_msl',
+                'px4_armed', 'px4_mode', 'step_dt_ms',
             ]
             writer.writerow(header)
 
@@ -1155,6 +1172,9 @@ class SITLBridge:
                     f"{self.history['lat'][i]:.8f}",
                     f"{self.history['lon'][i]:.8f}",
                     f"{self.history['alt_msl'][i]:.4f}",
+                    f"{self.history['px4_armed'][i]}",
+                    f"{self.history['px4_mode'][i]}",
+                    f"{self.history['step_dt_ms'][i]:.3f}",
                 ]
                 writer.writerow(row)
 

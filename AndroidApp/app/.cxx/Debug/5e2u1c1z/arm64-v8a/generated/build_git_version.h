@@ -1,7 +1,7 @@
 #pragma once
-#define PX4_GIT_VERSION_STR      "68fb0b8ad2527815782ce0510f00979fe8d92ef2"
-#define PX4_GIT_VERSION_BINARY    0x68fb0b8ad2527815ULL
-#define PX4_GIT_TAG_STR          "68fb0b8a-dirty"
+#define PX4_GIT_VERSION_STR      "a2ef6057ee527782241f7d10a582b19064a69e45"
+#define PX4_GIT_VERSION_BINARY    0xa2ef6057ee527782ULL
+#define PX4_GIT_TAG_STR          "a2ef605"
 #define PX4_GIT_BRANCH_STR       "master"
 #define PX4_GIT_BRANCH_NAME      "master"
 #define PX4_GIT_OEM_VERSION_STR  ""

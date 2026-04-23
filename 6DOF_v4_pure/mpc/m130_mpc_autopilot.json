@@ -1,7 +1,7 @@
 {
     "code_gen_opts": {
-        "acados_include_path": "/home/yoga/m13/acados-main/include",
-        "acados_lib_path": "/home/yoga/m13/acados-main/lib",
+        "acados_include_path": "/home/wd/Desktop/gab_2/m13/acados-main/include",
+        "acados_lib_path": "/home/wd/Desktop/gab_2/m13/acados-main/lib",
         "acados_link_libs": {
             "clarabel": "",
             "daqp": "",
@@ -13,12 +13,12 @@
             "qpoases": ""
         },
         "acados_version": "unknown",
-        "code_export_directory": "/home/yoga/m13/6DOF_v4_pure/c_generated_code",
+        "code_export_directory": "/home/wd/Desktop/gab_2/q_2/2/m13/6DOF_v4_pure/sitl_comprehensive/c_generated_code",
         "cython_include_dirs": [
-            "/home/yoga/.local/lib/python3.10/site-packages/numpy/_core/include",
+            "/home/wd/.local/lib/python3.10/site-packages/numpy/core/include",
             "/usr/include/python3.10"
         ],
-        "json_file": "/home/yoga/m13/6DOF_v4_pure/mpc/m130_mpc_autopilot.json",
+        "json_file": "/home/wd/Desktop/gab_2/q_2/2/m13/6DOF_v4_pure/mpc/m130_mpc_autopilot.json",
         "os": "unix",
         "shared_lib_ext": ".so"
     },
@@ -1873,7 +1873,7 @@
         "m130_rocket_model/m130_rocket_expl_vde_adj.c"
     ],
     "external_function_files_ocp": [],
-    "hash": "b1db74204ac63c5da422c805a56c9e4b",
+    "hash": "59992fdf93c20696d697aedf96f51bec",
     "model": {
         "con_h_expr": [],
         "con_h_expr_0": [],

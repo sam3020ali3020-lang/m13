@@ -41,14 +41,14 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "px4phone_native::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-px4phone_native-Debug-d4be59c44d4a6dbbf056.json",
+					"jsonFile" : "target-px4phone_native-Debug-aed1ff65d098e28c0f90.json",
 					"name" : "px4phone_native",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "usb1.0::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-usb1.0-Debug-a74372e842d55381441e.json",
+					"jsonFile" : "target-usb1.0-Debug-de1310b160d17a9d7143.json",
 					"name" : "usb1.0",
 					"projectIndex" : 0
 				}
@@ -58,8 +58,8 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "/home/yoga/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
-		"source" : "/home/yoga/m13/AndroidApp/app/src/main/cpp"
+		"build" : "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/.cxx/Debug/5e2u1c1z/arm64-v8a",
+		"source" : "/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/src/main/cpp"
 	},
 	"version" : 
 	{

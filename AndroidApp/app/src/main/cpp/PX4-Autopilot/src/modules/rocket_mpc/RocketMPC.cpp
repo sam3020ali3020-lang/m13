@@ -1588,24 +1588,17 @@ void RocketMPC::Run()
 	}
 
 	// ---- Publish actuator outputs (always, to be sole authority) ----
-	// HIL/SITL: publish radians to actuator_outputs_sim (XqpowerCan HIL branch expects rad).
-	// Real flight: publish normalized [-1,+1] to actuator_servos (XqpowerCan multiplies by _angle_limit).
+	// Unified normalized output: always publish actuator_servos so XqpowerCan
+	// uses a single code path (val × _angle_limit) regardless of HITL/real.
+	// In HIL/SITL we ALSO publish actuator_outputs_sim (radians) because
+	// SimulatorMavlink lockstep requires that topic on every IMU tick.
+	// Both topics carry the same physical deflection; only the encoding differs.
 	{
-		const bool sim_path = _hitl || (_param_sitl_gps.get() == 1);
+		const float max_d     = SOLVER_DELTA_MAX_RAD;   // 0.3491 rad = 20°
+		const float inv_max_d = 1.0f / max_d;
 
-		if (sim_path) {
-			actuator_outputs_s ao{};
-			ao.timestamp = now;
-			ao.noutputs  = 4;
-			ao.output[0] = fin[0];
-			ao.output[1] = fin[1];
-			ao.output[2] = fin[2];
-			ao.output[3] = fin[3];
-			_actuator_outputs_sim_pub.publish(ao);
-
-		} else {
-			const float max_d = SOLVER_DELTA_MAX_RAD;
-			const float inv_max_d = 1.0f / max_d;
+		// --- actuator_servos (normalized) — used by XqpowerCan in ALL modes ---
+		{
 			actuator_servos_s as{};
 			as.timestamp        = now;
 			as.timestamp_sample = sc.timestamp;
@@ -1625,6 +1618,21 @@ void RocketMPC::Run()
 			}
 
 			_actuator_servos_pub.publish(as);
+		}
+
+		// --- actuator_outputs_sim (radians) — required for HITL/SITL lockstep ---
+		// SimulatorMavlink blocks the sim step until this topic is published.
+		// XqpowerCan now ignores this topic (priority 1 = actuator_servos),
+		// so the radians encoding here causes no double-actuation.
+		if (_hitl || (_param_sitl_gps.get() == 1)) {
+			actuator_outputs_s ao{};
+			ao.timestamp = now;
+			ao.noutputs  = 4;
+			ao.output[0] = fin[0];
+			ao.output[1] = fin[1];
+			ao.output[2] = fin[2];
+			ao.output[3] = fin[3];
+			_actuator_outputs_sim_pub.publish(ao);
 		}
 
 		// Servo feedback (debug_array id=1, name="SRV_FB") is published

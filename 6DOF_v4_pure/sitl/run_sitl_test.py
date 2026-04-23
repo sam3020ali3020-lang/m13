@@ -169,6 +169,33 @@ def main():
 
     run_sitl(args.px4_bin, args.sitl_config, args.sim_config, sitl_csv, args.port)
 
+    # Generate interactive HTML report
+    try:
+        import importlib.util
+        _rpt_path = os.path.join(os.path.dirname(__file__), 'sitl_html_report.py')
+        _spec = importlib.util.spec_from_file_location('sitl_html_report', _rpt_path)
+        _mod  = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        html_path = sitl_csv.replace('.csv', '_report.html')
+        # Locate PX4 stdout log and ULG
+        _px4_log = os.path.join(str(_RESULTS_DIR), 'px4_stdout.log')
+        _px4_log = _px4_log if os.path.isfile(_px4_log) else None
+        _ulg = _mod._find_ulg(args.px4_bin or '')
+        print(f"\n  Generating HTML report...")
+        if _ulg: print(f"  ULG: {_ulg}")
+        _mod.generate_sitl_html_report(
+            sitl_csv, html_path,
+            metadata={'timing_mode': 'lockstep', 'px4_bin': args.px4_bin or ''},
+            px4_log_path=_px4_log,
+            ulg_path=_ulg,
+            auto_open=True,
+        )
+        print(f"  ✓ HTML Report: {html_path}")
+    except Exception as _e:
+        import traceback
+        print(f"\n  [WARNING] Could not generate HTML report: {_e}")
+        traceback.print_exc()
+
 
 if __name__ == '__main__':
     main()

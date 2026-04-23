@@ -137,7 +137,7 @@ launch:
 # الهدف (Target) - الأولوية 1: range_m+bearing_deg | الأولوية 2: lat+lon
 # ==========================================================================
 target:
-  range_m: 2600          # m
+  range_m: 3000        # m
   bearing_deg: 0              # deg من الشمال
   altitude: 1200.0             # m above sea level (ارتفاع نقطة الاصطدام - impact elevation)
   # latitude: 18.231732       # deg (230 km from launch at bearing 329°)
