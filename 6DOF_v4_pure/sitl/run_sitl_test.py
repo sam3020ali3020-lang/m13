@@ -29,10 +29,10 @@ sys.path.insert(0, str(_SIM_DIR))
 
 def run_sitl(px4_bin: str = None, sitl_config: str = None,
              sim_config: str = None, output_csv: str = None,
-             port: int = 4560) -> str:
+             port: int = 4560) -> dict:
     """Launch PX4 (optional) and drive it through the 6DOF MAVLink bridge.
 
-    Returns path to the CSV flight log.
+    Returns run artifacts for the generated SITL flight.
     """
     print("=" * 70)
     print("  SITL: PX4 rocket_mpc + 6DOF MAVLink bridge")
@@ -40,6 +40,7 @@ def run_sitl(px4_bin: str = None, sitl_config: str = None,
 
     csv_path = output_csv or str(_RESULTS_DIR / 'sitl_flight.csv')
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    run_output_dir = os.path.dirname(os.path.abspath(csv_path))
 
     sitl_cfg = sitl_config or str(_SCRIPT_DIR / 'sitl_config.yaml')
 
@@ -83,7 +84,7 @@ def run_sitl(px4_bin: str = None, sitl_config: str = None,
         # PX4 stdout log file — CRITICAL: do NOT use subprocess.PIPE without
         # reading it.  The 64KB pipe buffer fills up, PX4 blocks on write,
         # and the sim_rcv/sim_send threads deadlock → TCP dies → BrokenPipe.
-        px4_log_path = os.path.join(str(_RESULTS_DIR), 'px4_stdout.log')
+        px4_log_path = os.path.join(run_output_dir, 'px4_stdout.log')
         os.makedirs(os.path.dirname(px4_log_path), exist_ok=True)
         px4_log_file = open(px4_log_path, 'w', encoding='utf-8')
 
@@ -134,7 +135,10 @@ def run_sitl(px4_bin: str = None, sitl_config: str = None,
                 print(f"  --- end PX4 stdout ---\n")
 
     print(f"  Saved: {csv_path}")
-    return csv_path
+    return {
+        'csv_path': csv_path,
+        'px4_log_path': px4_log_path,
+    }
 
 
 def main():
@@ -167,7 +171,14 @@ def main():
     print("╚══════════════════════════════════════════════════════╝")
     print()
 
-    run_sitl(args.px4_bin, args.sitl_config, args.sim_config, sitl_csv, args.port)
+    run_artifacts = run_sitl(
+        args.px4_bin,
+        args.sitl_config,
+        args.sim_config,
+        sitl_csv,
+        args.port,
+    )
+    sitl_csv = run_artifacts['csv_path']
 
     # Generate interactive HTML report
     try:
@@ -176,11 +187,15 @@ def main():
         _spec = importlib.util.spec_from_file_location('sitl_html_report', _rpt_path)
         _mod  = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
-        html_path = sitl_csv.replace('.csv', '_report.html')
+        _csv_path = Path(sitl_csv)
+        html_path = str(_csv_path.parent / 'plots' / f'analysis_{_csv_path.stem}.html')
         # Locate PX4 stdout log and ULG
-        _px4_log = os.path.join(str(_RESULTS_DIR), 'px4_stdout.log')
+        _px4_log = run_artifacts.get('px4_log_path')
         _px4_log = _px4_log if os.path.isfile(_px4_log) else None
-        _ulg = _mod._find_ulg(args.px4_bin or '')
+        _ulg = _mod._find_ulg(
+            args.px4_bin or '',
+            min_mtime=os.path.getmtime(sitl_csv) - 1.0,
+        )
         print(f"\n  Generating HTML report...")
         if _ulg: print(f"  ULG: {_ulg}")
         _mod.generate_sitl_html_report(

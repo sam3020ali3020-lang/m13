@@ -1,7 +1,7 @@
 {
     "code_gen_opts": {
-        "acados_include_path": "/home/yoga/m13/acados-main/include",
-        "acados_lib_path": "/home/yoga/m13/acados-main/lib",
+        "acados_include_path": "/home/wd/Desktop/gab_2/q_2/2/m13/acados-main/include",
+        "acados_lib_path": "/home/wd/Desktop/gab_2/q_2/2/m13/acados-main/lib",
         "acados_link_libs": {
             "clarabel": "",
             "daqp": "",
@@ -13,9 +13,9 @@
             "qpoases": ""
         },
         "acados_version": "unknown",
-        "code_export_directory": "/home/yoga/m13/c_generated_code",
+        "code_export_directory": "/home/wd/Desktop/gab_2/q_2/2/m13/c_generated_code",
         "cython_include_dirs": [
-            "/home/yoga/m13/.venv/lib/python3.10/site-packages/numpy/_core/include",
+            "/home/wd/.local/lib/python3.10/site-packages/numpy/core/include",
             "/usr/include/python3.10"
         ],
         "json_file": "m130_mhe_ocp.json",
@@ -3650,7 +3650,7 @@
         "m130_mhe_cost/m130_mhe_cost_y_fun_jac_ut_xt.c",
         "m130_mhe_cost/m130_mhe_cost_y_hess.c"
     ],
-    "hash": "76320b928c75ea3be3e62fc6980d0e8d",
+    "hash": "462447eec3b7ab2cbc1043174e60291a",
     "model": {
         "con_h_expr": [],
         "con_h_expr_0": [],

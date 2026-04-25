@@ -90,6 +90,8 @@ struct rocket_gnc_status_s {
 	float xval_chi_err;
 	float xval_alt_err;
 	float xval_penalty;
+	uint32_t can_stale_us;
+	uint32_t can_abort_events;
 	float bearing_deg;
 	float target_range_remaining;
 	float dt_actual;
@@ -107,11 +109,13 @@ struct rocket_gnc_status_s {
 	uint8_t stage;
 	uint8_t mhe_valid;
 	uint8_t servo_online_mask;
+	uint8_t first_fb_received;
+	uint8_t valid_mask;
 	bool launched;
 	uint8_t gps_fix_type;
 	uint8_t gps_satellites_used;
 	uint8_t gps_jamming_state;
-	uint8_t _padding0[5]; // required for logger
+	uint8_t _padding0[3]; // required for logger
 
 
 #ifdef __cplusplus

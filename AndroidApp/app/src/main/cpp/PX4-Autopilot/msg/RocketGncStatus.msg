@@ -84,6 +84,18 @@ float32 xval_penalty      # [0..1] Cross-validation penalty applied to the blend
 # --- Servo feedback ---
 uint8 servo_online_mask   # Bitmask: bit0=servo0 .. bit3=servo3 (1=online, 0=offline)
 
+# --- CAN feedback health (feedback-only path for _de_act/_dr_act/_da_act) ---
+# Populated by RocketMPC when ROCKET_USE_SRV_FB=1.  In SITL (22003) the
+# feedback path is disabled and these fields remain zero except
+# first_fb_received, which is also zero because no CAN feedback exists.
+uint32 can_stale_us       # [us] Time since last valid SRV_FB frame (0 when fresh)
+uint32 can_abort_events   # Count of entries into CAN-lost abort state (>500ms stale)
+uint8  first_fb_received  # 1 after the first valid SRV_FB frame has been consumed
+uint8  valid_mask         # Bitmask of servos used in the last back-solve update
+                          #   bit0=servo0 .. bit3=servo3.  0x0F = all four fresh;
+                          #   0x0E/0x0D/0x0B/0x07 = three fresh + one hold from
+                          #   last known feedback; other values = hold (de,dr,da).
+
 # --- Navigation ---
 float32 bearing_deg              # [deg] Bearing to target from arm heading
 float32 target_range_remaining   # [m] Remaining range to target

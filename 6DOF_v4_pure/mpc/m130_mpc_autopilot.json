@@ -13,7 +13,7 @@
             "qpoases": ""
         },
         "acados_version": "unknown",
-        "code_export_directory": "/home/wd/Desktop/gab_2/q_2/2/m13/6DOF_v4_pure/sitl_comprehensive/c_generated_code",
+        "code_export_directory": "/home/wd/Desktop/gab_2/q_2/2/c_generated_code",
         "cython_include_dirs": [
             "/home/wd/.local/lib/python3.10/site-packages/numpy/core/include",
             "/usr/include/python3.10"
@@ -1873,7 +1873,7 @@
         "m130_rocket_model/m130_rocket_expl_vde_adj.c"
     ],
     "external_function_files_ocp": [],
-    "hash": "59992fdf93c20696d697aedf96f51bec",
+    "hash": "fe42999922bf84319306c18bb07490ea",
     "model": {
         "con_h_expr": [],
         "con_h_expr_0": [],

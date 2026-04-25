@@ -371,3 +371,38 @@ PARAM_DEFINE_FLOAT(ROCKET_MPC_TF, 4.0f);
  * @group Rocket MPC
  */
 PARAM_DEFINE_INT32(ROCKET_SITL_GPS, 0);
+
+/* ===================================================================
+ *  CAN servo feedback path
+ * =================================================================== */
+
+/**
+ * Use CAN SRV_FB as the source of truth for _de_act/_dr_act/_da_act
+ *
+ * 0 = disabled (legacy first-order-lag filter on the commanded deflections,
+ *     with tau matching the acados solver's internal tau_servo). This path
+ *     is the ONLY safe option for SITL (22003) because SITL has no CAN bus
+ *     and leaving the feedback path enabled would freeze _de_act at 0 and
+ *     bias the MHE aerodynamic model.
+ *
+ * 1 = enabled (HITL / real flight). RocketMPC reads SRV_FB (debug_array
+ *     id=1, name="SRV_FB") published by drivers/xqpower_can, checks the
+ *     per-servo age stamped in data[14..17] (ms) against a fresh-threshold
+ *     of 120 ms, back-solves de/dr/da from the four physical fin positions
+ *     (least-squares inverse of the X-fin mixer), rate-limits the feedback
+ *     to 400°/s, and holds the last valid (de,dr,da) when ≥2 servos are
+ *     stale. The existing first-order lag filter is skipped in this mode.
+ *
+ *   Airframes:
+ *     22003 SITL                 -> 0 (default, enforced by omission)
+ *     22004 HITL                 -> 1 (set via param set-default in airframe)
+ *     22005 Real flight          -> 1 (set via param set-default in airframe)
+ *
+ * Telemetry: rocket_gnc_status.{can_stale_us, can_abort_events,
+ *            first_fb_received, valid_mask} reflect the feedback path.
+ *
+ * @min 0
+ * @max 1
+ * @group Rocket MPC
+ */
+PARAM_DEFINE_INT32(ROCKET_SRV_FB, 0);

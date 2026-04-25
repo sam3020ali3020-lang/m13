@@ -35,6 +35,12 @@ param set SENS_EN_MAGSIM 0
 # SITL session left ROCKET_SITL_GPS=1 in saved parameters.
 param set ROCKET_SITL_GPS 0
 
+# Real flight feeds _de_act/_dr_act/_da_act from the XQPOWER CAN servo
+# feedback (SRV_FB back-solved through the X-fin mixer) instead of the
+# legacy first-order-lag filter. This eliminates the tau_servo bias that
+# corrupts MHE's alpha / gyro_bias under max-Q.
+param set ROCKET_SRV_FB 1
+
 # ---- Magnetometer — IST8310 on MicoAir H743 ----
 param set EKF2_MAG_TYPE    6    # init-only
 param set SYS_HAS_MAG      1

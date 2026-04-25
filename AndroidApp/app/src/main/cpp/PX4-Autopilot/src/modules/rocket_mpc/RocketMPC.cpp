@@ -410,6 +410,19 @@ void RocketMPC::_reset_flight_state()
 	_mpc_solve_us = 0;
 	_cycle_us = 0;
 
+	// CAN feedback path — reset across arm/disarm so a fresh flight does
+	// not inherit a stale "last known fin" from a previous bench cycle.
+	for (int i = 0; i < 4; ++i) {
+		_last_fb_per_servo_rad[i] = 0.0f;
+		_last_fb_per_servo_valid[i] = false;
+	}
+	_last_fb_time = 0;
+	_first_fb_received = false;
+	_can_stale_us = 0;
+	_can_abort_events = 0;
+	_can_abort_warned = false;
+	_can_valid_mask = 0;
+
 	// MPC state & diagnostics snapshot
 	memset(_last_x_mpc, 0, sizeof(_last_x_mpc));
 	_have_x_mpc = false;
@@ -978,11 +991,31 @@ void RocketMPC::Run()
 		if (smeas.valid && _launch_alt_captured) {
 			_mhe.push_measurement(t, smeas.y);
 
-			// Update actual fin positions (first-order lag) BEFORE passing to MHE.
-			// MHE model expects delta_*_act (physical fin position), not the command.
-			{
-				// Guard: if tau_servo is misconfigured (=0) or dt is 0, the division
-				// would produce inf or NaN. Clamp tau to a minimum of 0.1 ms.
+			// Update actual fin positions (_de_act/_dr_act/_da_act) BEFORE
+			// passing them to MHE. MHE's aero/moment model consumes
+			// delta_*_act (the physical fin deflection), not the commanded
+			// delta_*_s, so a bias here leaks straight into alpha and
+			// gyro_bias estimates.
+			//
+			// Two source paths, selected by ROCKET_USE_SRV_FB:
+			//
+			//  0 (SITL, default): legacy first-order lag on the command,
+			//     with tau matching the acados solver's baked-in tau_servo
+			//     (see SOLVER_TAU_SERVO_S above). SITL has no CAN, so the
+			//     feedback path cannot be used there — disabling it keeps
+			//     the MHE model consistent with the Python simulator.
+			//
+			//  1 (HITL / real flight): back-solve (de,dr,da) from the four
+			//     physical fin angles reported by xqpower_can over CAN
+			//     (SRV_FB, data[4..7] in degrees; data[12] online mask;
+			//     data[14..17] per-servo age in ms). This replaces the
+			//     open-loop lag prediction with the actual servo state,
+			//     which is what MHE and the MPC warm-start need to see.
+			if (_param_use_srv_fb.get() == 0) {
+				// ── Legacy first-order lag (SITL) ──
+				// Guard: if tau_servo is misconfigured (=0) or dt is 0, the
+				// division would produce inf or NaN.  Clamp tau to a minimum
+				// of 0.1 ms.
 				float tau = _mpc.config().tau_servo;
 
 				if (tau < 1e-4f) { tau = 1e-4f; }
@@ -991,6 +1024,152 @@ void RocketMPC::Run()
 				_de_act = _de_act * decay + delta_e * (1.0f - decay);
 				_dr_act = _dr_act * decay + delta_r * (1.0f - decay);
 				_da_act = _da_act * decay + delta_a * (1.0f - decay);
+
+			} else {
+				// ── CAN SRV_FB feedback-only path (HITL / real) ──
+				debug_array_s dbg{};
+				bool fb_applied = false;
+				uint8_t new_valid_mask = 0;
+
+				// Freshness of the whole message — rejects dead xqpower_can.
+				if (_debug_array_sub.copy(&dbg)
+				    && dbg.id == 1
+				    && strncmp(dbg.name, "SRV_FB", 6) == 0
+				    && (now - dbg.timestamp) < CAN_FRESH_US) {
+
+					const uint8_t online_mask = (uint8_t)dbg.data[12];
+					const float   deg2rad     = M_PI_F / 180.0f;
+
+					// Refresh per-servo last-known angles using per-servo
+					// age stamped by xqpower_can in data[14..17]. A servo
+					// that was fresh this frame overwrites its last-known
+					// value; a stale/offline servo keeps its previous
+					// value so it can patch a transient single-channel
+					// dropout (see back-solve below).
+					uint8_t fresh_mask = 0;
+
+					for (int i = 0; i < 4; ++i) {
+						const uint32_t age_ms = (uint32_t)dbg.data[14 + i];
+						const bool online   = (online_mask & (1u << i)) != 0;
+						const bool age_ok   = (age_ms != 65535u)
+								      && (((hrt_abstime)age_ms * 1000ULL) < CAN_FRESH_US);
+
+						if (online && age_ok) {
+							_last_fb_per_servo_rad[i]   = dbg.data[4 + i] * deg2rad;
+							_last_fb_per_servo_valid[i] = true;
+							fresh_mask |= (uint8_t)(1u << i);
+						}
+					}
+
+					// Build the back-solve input vector: prefer fresh,
+					// fall back to last-known, count how many channels
+					// we can actually fill. popcount(fresh_mask) == 4
+					// is the happy path; == 3 and one patched from a
+					// previous fresh value is still acceptable; anything
+					// below that (≥2 missing) forces a full hold to avoid
+					// injecting a mixed fresh+stale state.
+					int fresh_count = 0;
+					for (int i = 0; i < 4; ++i) {
+						if (fresh_mask & (1u << i)) { ++fresh_count; }
+					}
+
+					bool can_update = false;
+					float f[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+					uint8_t used_mask = 0;
+
+					if (fresh_count == 4) {
+						for (int i = 0; i < 4; ++i) {
+							f[i] = _last_fb_per_servo_rad[i];
+						}
+						used_mask = 0x0F;
+						can_update = true;
+
+					} else if (fresh_count == 3) {
+						// Exactly one channel missing. It is patched with
+						// its last-known value iff we ever received one;
+						// otherwise we cannot back-solve this cycle.
+						int missing = -1;
+
+						for (int i = 0; i < 4; ++i) {
+							if ((fresh_mask & (1u << i)) == 0) { missing = i; }
+						}
+
+						if (missing >= 0 && _last_fb_per_servo_valid[missing]) {
+							for (int i = 0; i < 4; ++i) {
+								f[i] = _last_fb_per_servo_rad[i];
+							}
+
+							used_mask = fresh_mask;
+							can_update = true;
+						}
+					}
+					// else: ≥2 channels missing -> hold (de,dr,da) entirely.
+
+					if (can_update) {
+						// Least-squares inverse of the X-fin mixer:
+						//   fin[0] =  da - de - dr
+						//   fin[1] =  da - de + dr
+						//   fin[2] =  da + de + dr
+						//   fin[3] =  da + de - dr
+						const float de_fb = 0.25f * (-f[0] - f[1] + f[2] + f[3]);
+						const float dr_fb = 0.25f * (-f[0] + f[1] + f[2] - f[3]);
+						const float da_fb = 0.25f * ( f[0] + f[1] + f[2] + f[3]);
+
+						// Rate-limit rejects CAN spikes / noise without
+						// falling back to the lag model. Allowed step per
+						// cycle = 400°/s * dt (matches physical servo slew
+						// headroom on KST X20-7.4 at 8.4 V).
+						const float max_step = math::radians(MAX_FB_RATE_DPS) * dt;
+
+						if (!_first_fb_received
+						    || (fabsf(de_fb - _de_act) < max_step
+							&& fabsf(dr_fb - _dr_act) < max_step
+							&& fabsf(da_fb - _da_act) < max_step)) {
+							_de_act = de_fb;
+							_dr_act = dr_fb;
+							_da_act = da_fb;
+							_last_fb_time = now;
+							_first_fb_received = true;
+							fb_applied = true;
+							new_valid_mask = used_mask;
+						}
+					}
+				}
+
+				if (!fb_applied) {
+					// HOLD — do NOT reintroduce the lag filter here. MHE
+					// prefers a fixed-but-slightly-stale fin angle over a
+					// plausibly-predicted one, because the lag prediction
+					// biases its aero integration while a hold does not.
+					new_valid_mask = 0;
+
+					if (_last_fb_time > 0) {
+						const hrt_abstime stale_us = now - _last_fb_time;
+						_can_stale_us = (stale_us > UINT32_MAX)
+								? UINT32_MAX : (uint32_t)stale_us;
+
+						if (stale_us > CAN_ABORT_US) {
+							if (!_can_abort_warned) {
+								mavlink_log_critical(&_mavlink_log_pub,
+									"CAN feedback lost >500ms — MHE fin state frozen\t");
+								_can_abort_warned = true;
+								_can_abort_events++;
+							}
+						}
+					} else {
+						// Never received a frame yet — surface the full
+						// time-since-boot as staleness so telemetry makes
+						// the pre-first-frame window explicit.
+						const hrt_abstime boot_us = now;
+						_can_stale_us = (boot_us > UINT32_MAX)
+								? UINT32_MAX : (uint32_t)boot_us;
+					}
+				} else {
+					_can_stale_us = 0;
+					_can_abort_warned = false;
+				}
+
+				_can_valid_mask = new_valid_mask;
 			}
 
 			// MHE parameters must match m130_mhe_model.py:
@@ -1785,6 +1964,14 @@ void RocketMPC::Run()
 		status.gps_fix_type        = _gps_fix_type;
 		status.gps_satellites_used = _gps_sats_used;
 		status.gps_jamming_state   = _gps_jamming_state;
+
+		// --- CAN feedback health (feedback-only path for _de_act/_dr_act/_da_act) ---
+		// Zero when ROCKET_USE_SRV_FB=0 (SITL); reflect actual back-solve
+		// health when ROCKET_USE_SRV_FB=1 (HITL / real).
+		status.can_stale_us      = _can_stale_us;
+		status.can_abort_events  = _can_abort_events;
+		status.first_fb_received = _first_fb_received ? 1 : 0;
+		status.valid_mask        = _can_valid_mask;
 
 		_rocket_gnc_status_pub.publish(status);
 	}

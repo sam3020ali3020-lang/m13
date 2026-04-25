@@ -230,8 +230,33 @@ private:
 	uint32_t _fin_clamp_solves{0};     // valid-solve denominator
 	uint32_t _fin_clamp_report_at{0};  // next solve index at which to print
 
-	// Tracked actual fin deflections (first-order lag filter)
+	// Tracked actual fin deflections.  Source depends on ROCKET_USE_SRV_FB:
+	//   0  -> first-order lag filter on commanded deflections (tau matches
+	//         the acados solver's baked-in tau_servo, used in SITL only).
+	//   1  -> CAN SRV_FB back-solve (HITL / real flight). See the feedback
+	//         block in RocketMPC::Run() and the state variables below.
 	float _de_act{0.0f}, _dr_act{0.0f}, _da_act{0.0f};
+
+	// ── CAN feedback path state (used when ROCKET_USE_SRV_FB=1) ──
+	// The per-servo last-known feedback angles are retained so that a brief
+	// dropout of a single servo can be patched with its last known value and
+	// the back-solve still produces the correct de/dr/da triplet.  Ages are
+	// re-derived from SRV_FB.data[14..17] (ms since last CAN frame) every
+	// time a new SRV_FB message is copied, so _last_fb_per_servo_rad stays
+	// consistent with the freshness mask.
+	float       _last_fb_per_servo_rad[4] {0.0f, 0.0f, 0.0f, 0.0f};
+	bool        _last_fb_per_servo_valid[4] {false, false, false, false};
+	hrt_abstime _last_fb_time{0};          // timestamp of last successful update
+	bool        _first_fb_received{false}; // latched once a valid frame lands
+	uint32_t    _can_stale_us{0};          // microseconds since _last_fb_time
+	uint32_t    _can_abort_events{0};      // count of >500 ms stale entries
+	bool        _can_abort_warned{false};  // one-shot mavlink warning latch
+	uint8_t     _can_valid_mask{0};        // mask of servos used last cycle
+
+	// Freshness / safety thresholds for the feedback path.
+	static constexpr hrt_abstime CAN_FRESH_US     = 120_ms;
+	static constexpr hrt_abstime CAN_ABORT_US     = 500_ms;
+	static constexpr float       MAX_FB_RATE_DPS  = 400.0f;
 
 	// Latest full MPC state vector (x0 passed to the acados solver).  Cached so
 	// rocket_gnc_status can publish x_mpc[18] on every cycle, including ticks
@@ -320,6 +345,11 @@ private:
 		(ParamFloat<px4::params::ROCKET_MPC_TF>)    _param_mpc_tf,
 
 		// SITL: use EKF2 lpos as GPS substitute for MHE (0=disabled, 1=enabled)
-		(ParamInt<px4::params::ROCKET_SITL_GPS>)     _param_sitl_gps
+		(ParamInt<px4::params::ROCKET_SITL_GPS>)     _param_sitl_gps,
+
+		// CAN SRV_FB feedback path for _de_act/_dr_act/_da_act
+		// 0 = legacy first-order-lag filter (SITL)
+		// 1 = CAN SRV_FB back-solve (HITL / real flight)
+		(ParamInt<px4::params::ROCKET_SRV_FB>)       _param_use_srv_fb
 	)
 };

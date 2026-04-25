@@ -46,7 +46,7 @@
 
 
 static_assert(static_cast<orb_id_size_t>(ORB_ID::rocket_gnc_status) == 208, "ORB_ID index mismatch");
-ORB_DEFINE(rocket_gnc_status, struct rocket_gnc_status_s, 299, 3256586993u, static_cast<orb_id_size_t>(ORB_ID::rocket_gnc_status), 1);
+ORB_DEFINE(rocket_gnc_status, struct rocket_gnc_status_s, 309, 2783290761u, static_cast<orb_id_size_t>(ORB_ID::rocket_gnc_status), 1);
 
 
 void print_message(const orb_metadata *meta, const rocket_gnc_status_s& message)

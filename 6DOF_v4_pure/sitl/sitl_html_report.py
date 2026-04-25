@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-sitl_html_report.py — SITL Analysis Report (نفس تنسيق advanced_analysis.py بالضبط)
+sitl_html_report.py — SITL Analysis Report
 
-Maps SITL CSV + PX4 ULG → advanced_analysis.py schema → identical HTML report + MHE/MPC tab
+Maps SITL CSV → advanced_analysis.py schema → exact reference HTML report
 
 Usage:
     python3 sitl_html_report.py <csv> --html <out.html> [--ulg <path>] [--no-open]
@@ -125,6 +125,10 @@ def _load_sitl_csv(path: Path) -> pd.DataFrame:
 
     # ── Time ─────────────────────────────────────────────────────────────────
     t_arr           = raw['time'].astype(float).values
+    t_grad          = t_arr.copy()
+    for i in range(1, len(t_grad)):
+        if t_grad[i] <= t_grad[i - 1]:
+            t_grad[i] = t_grad[i - 1] + 1e-6
     df['time_s']    = t_arr
 
     # ── Altitude ─────────────────────────────────────────────────────────────
@@ -177,9 +181,16 @@ def _load_sitl_csv(path: Path) -> pd.DataFrame:
     df['omega_x_deg_s']     = np.degrees(raw['omega_x'].astype(float))
     df['omega_y_deg_s']     = np.degrees(raw['omega_y'].astype(float))
     df['omega_z_deg_s']     = np.degrees(raw['omega_z'].astype(float))
+    df['omega_x_rad_s']     = raw['omega_x'].astype(float)
+    df['omega_y_rad_s']     = raw['omega_y'].astype(float)
+    df['omega_z_rad_s']     = raw['omega_z'].astype(float)
     df['omega_total_deg_s'] = np.sqrt(df['omega_x_deg_s']**2 +
                                        df['omega_y_deg_s']**2 +
                                        df['omega_z_deg_s']**2)
+    dt_safe = np.where(np.gradient(t_grad) > 0, np.gradient(t_grad), 1e-6)
+    df['angular_accel_x_rad_s2'] = np.gradient(df['omega_x_rad_s'].values, t_grad)
+    df['angular_accel_y_rad_s2'] = np.gradient(df['omega_y_rad_s'].values, t_grad)
+    df['angular_accel_z_rad_s2'] = np.gradient(df['omega_z_rad_s'].values, t_grad)
 
     # ── AoA / Sideslip ────────────────────────────────────────────────────────
     alpha_rad = raw['alpha'].astype(float).values
@@ -256,7 +267,7 @@ def _load_sitl_csv(path: Path) -> pd.DataFrame:
     df['KE_kJ']           = 0.5 * mass_arr * vtot**2 / 1000.0
     df['PE_kJ']           = mass_arr * G * alt_agl_arr / 1000.0
     df['total_energy_kJ'] = df['KE_kJ'] + df['PE_kJ']
-    dt_arr                = np.where(np.gradient(t_arr) > 0, np.gradient(t_arr), 1e-6)
+    dt_arr                = dt_safe
     df['dE_dt_kW']        = np.gradient(df['total_energy_kJ'].values) / dt_arr
 
     # ── Flight path angle & range error ───────────────────────────────────────
@@ -305,14 +316,7 @@ def _load_sitl_csv(path: Path) -> pd.DataFrame:
     df['safety_violations']  = np.zeros(len(df))
 
     # ── attrs flags ───────────────────────────────────────────────────────────
-    df.attrs['has_mhe']           = False
-    df.attrs['has_sensor']        = False
-    df.attrs['has_lla']           = True
-    df.attrs['has_actuator_cmd']  = True
-    df.attrs['has_fins']          = True
-    df.attrs['has_mpc_diag']      = False
-    df.attrs['has_angular_accel'] = False
-    df.attrs['has_mhe_states']    = False
+    _refresh_reference_flags(df)
 
     # ── Flight phase ──────────────────────────────────────────────────────────
     df['flight_phase'] = _compute_flight_phase(df)
@@ -322,7 +326,7 @@ def _load_sitl_csv(path: Path) -> pd.DataFrame:
 
 # ── ULG loader ────────────────────────────────────────────────────────────────
 def _load_ulg(ulg_path: str) -> dict:
-    """Load PX4 ULG and return rocket_gnc_status arrays."""
+    """Load PX4 ULG and return rocket_gnc_status plus estimator auxiliaries."""
     try:
         from pyulog import ULog
     except ImportError:
@@ -332,25 +336,182 @@ def _load_ulg(ulg_path: str) -> dict:
     except Exception:
         return {}
     try:
-        msgs = [m for m in ulog.data_list if m.name == 'rocket_gnc_status']
-        if not msgs:
+        topics = {}
+        for name in ('rocket_gnc_status', 'estimator_sensor_bias', 'estimator_states'):
+            msgs = [m for m in ulog.data_list if m.name == name]
+            if msgs:
+                topics[name] = msgs[0].data
+        gnc_data = topics.get('rocket_gnc_status')
+        if gnc_data is None:
             return {}
-        data = msgs[0].data
-        t0   = data['timestamp'][0]
-        out  = {'t': (data['timestamp'] - t0) / 1e6}
-        for k in data.keys():
-            if k != 'timestamp':
+
+        t0 = gnc_data['timestamp'][0]
+
+        def _pack_topic(data):
+            packed = {'t': (data['timestamp'] - t0) / 1e6}
+            for key, values in data.items():
+                if key == 'timestamp':
+                    continue
                 try:
-                    out[k] = data[k].astype(float)
+                    packed[key] = values.astype(float)
                 except Exception:
                     pass
+            return packed
+
+        out = _pack_topic(gnc_data)
+        if 'estimator_sensor_bias' in topics:
+            out['_estimator_sensor_bias'] = _pack_topic(topics['estimator_sensor_bias'])
+        if 'estimator_states' in topics:
+            out['_estimator_states'] = _pack_topic(topics['estimator_states'])
         return out
     except Exception:
         return {}
 
 
-def _find_ulg(px4_bin: str = '') -> str:
-    """Auto-detect the most recent ULG log."""
+def _interp_to_sim_time(sim_t: np.ndarray, src_t: np.ndarray, values, *, round_int: bool = False) -> np.ndarray:
+    src = np.asarray(values, dtype=float)
+    if len(src_t) == 0 or len(src) == 0:
+        return np.zeros_like(sim_t, dtype=float)
+    if len(src_t) != len(src):
+        n = min(len(src_t), len(src))
+        src_t = src_t[:n]
+        src = src[:n]
+    out = np.interp(sim_t, src_t, src, left=src[0], right=src[-1])
+    if round_int:
+        out = np.rint(out)
+    return out
+
+
+def _refresh_reference_flags(df: pd.DataFrame) -> None:
+    df.attrs['has_mhe'] = 'mhe_quality' in df.columns and df['mhe_quality'].abs().max() > 0
+    df.attrs['has_sensor'] = 'accel_meas_x' in df.columns
+    df.attrs['has_lla'] = 'latitude_deg' in df.columns
+    df.attrs['has_actuator_cmd'] = 'actuator_cmd_fin1_rad' in df.columns
+    df.attrs['has_fins'] = 'fin_1_rad' in df.columns
+    df.attrs['has_mpc_diag'] = (
+        'mpc_solve_time_ms' in df.columns and
+        (
+            df['mpc_solve_time_ms'].abs().max() > 0 or
+            ('mpc_delta_e_rad' in df.columns and df['mpc_delta_e_rad'].abs().max() > 0.001)
+        )
+    )
+    df.attrs['has_angular_accel'] = 'angular_accel_x_rad_s2' in df.columns
+    mhe_state_columns = [
+        'mhe_V_m_s',
+        'mhe_gamma_rad',
+        'mhe_alpha_rad',
+        'mhe_beta_rad',
+        'mhe_phi_rad',
+        'mhe_p_rad_s',
+        'mhe_q_rad_s',
+        'mhe_r_rad_s',
+        'mhe_bgx_rad_s',
+        'mhe_bgy_rad_s',
+        'mhe_bgz_rad_s',
+        'mhe_wn_m_s',
+        'mhe_we_m_s',
+    ]
+    df.attrs['has_mhe_states'] = all(col in df.columns for col in mhe_state_columns)
+    if df.attrs['has_mhe_states']:
+        df['mhe_gamma_deg'] = np.degrees(df['mhe_gamma_rad'])
+        df['mhe_chi_deg'] = np.degrees(df['mhe_chi_rad'])
+        df['mhe_alpha_deg'] = np.degrees(df['mhe_alpha_rad'])
+        df['mhe_beta_deg'] = np.degrees(df['mhe_beta_rad'])
+        df['mhe_phi_deg'] = np.degrees(df['mhe_phi_rad'])
+        df['mhe_p_deg_s'] = np.degrees(df['mhe_p_rad_s'])
+        df['mhe_q_deg_s'] = np.degrees(df['mhe_q_rad_s'])
+        df['mhe_r_deg_s'] = np.degrees(df['mhe_r_rad_s'])
+        df['mhe_alt_m'] = df['mhe_h_scaled'] * 100.0 + LAUNCH_ALT_M
+        df['mhe_xg_m'] = df['mhe_xg_scaled'] * 1000.0
+        df['mhe_yg_m'] = df['mhe_yg_scaled'] * 1000.0
+        mhe_active = df['mhe_quality'] > 0
+        df['mhe_alpha_error_deg'] = np.where(mhe_active, df['mhe_alpha_deg'] - np.degrees(df['alpha_rad']), np.nan)
+        df['mhe_beta_error_deg'] = np.where(mhe_active, df['mhe_beta_deg'] - np.degrees(df['beta_rad']), np.nan)
+        df['mhe_V_error_m_s'] = np.where(mhe_active, df['mhe_V_m_s'] - df['airspeed_m_s'], np.nan)
+        df['mhe_gamma_error_deg'] = np.where(mhe_active, df['mhe_gamma_deg'] - df['gamma_deg'], np.nan)
+
+
+def _merge_ulg_reference_fields(df: pd.DataFrame, gnc: dict) -> pd.DataFrame:
+    if not gnc or 't' not in gnc or len(gnc['t']) == 0:
+        _refresh_reference_flags(df)
+        return df
+
+    sim_t = df['time_s'].values.astype(float)
+    gnc_t = np.asarray(gnc['t'], dtype=float)
+
+    scalar_map = {
+        'mhe_quality': ('mhe_quality', False),
+        'mhe_solve_ms': ('mhe_solve_ms', False),
+        'mpc_solve_time_ms': ('mpc_solve_ms', False),
+        'mpc_solver_status': ('mpc_solver_status', True),
+        'mpc_sqp_iterations': ('mpc_sqp_iter', True),
+        'mpc_delta_e_rad': ('delta_pitch', False),
+        'mpc_delta_r_rad': ('delta_yaw', False),
+        'mpc_delta_a_rad': ('delta_roll', False),
+    }
+    for dst, (src, round_int) in scalar_map.items():
+        if src in gnc:
+            df[dst] = _interp_to_sim_time(sim_t, gnc_t, gnc[src], round_int=round_int)
+
+    if 'xval_gamma_err' in gnc:
+        gamma_err_deg = np.degrees(_interp_to_sim_time(sim_t, gnc_t, gnc['xval_gamma_err']))
+        df['mpc_gamma_error_deg'] = gamma_err_deg
+        df['mpc_gamma_ref_deg'] = df['gamma_deg'].values - gamma_err_deg
+        df['tracking_error_gamma_deg'] = gamma_err_deg
+
+    if 'xval_chi_err' in gnc:
+        chi_err_deg = np.degrees(_interp_to_sim_time(sim_t, gnc_t, gnc['xval_chi_err']))
+        df['mpc_chi_error_deg'] = chi_err_deg
+        df['mpc_chi_ref_deg'] = df['yaw_deg'].values - chi_err_deg
+        df['tracking_error_chi_deg'] = chi_err_deg
+
+    mhe_state_map = {
+        'mhe_V_m_s': 'x_mpc[0]',
+        'mhe_gamma_rad': 'x_mpc[1]',
+        'mhe_chi_rad': 'x_mpc[2]',
+        'mhe_p_rad_s': 'x_mpc[3]',
+        'mhe_q_rad_s': 'x_mpc[4]',
+        'mhe_r_rad_s': 'x_mpc[5]',
+        'mhe_alpha_rad': 'x_mpc[6]',
+        'mhe_beta_rad': 'x_mpc[7]',
+        'mhe_phi_rad': 'x_mpc[8]',
+        'mhe_h_scaled': 'x_mpc[9]',
+        'mhe_xg_scaled': 'x_mpc[10]',
+        'mhe_yg_scaled': 'x_mpc[11]',
+    }
+    for dst, src in mhe_state_map.items():
+        if src in gnc:
+            df[dst] = _interp_to_sim_time(sim_t, gnc_t, gnc[src])
+
+    sensor_bias = gnc.get('_estimator_sensor_bias')
+    if sensor_bias and 't' in sensor_bias:
+        bias_t = np.asarray(sensor_bias['t'], dtype=float)
+        bias_map = {
+            'mhe_bgx_rad_s': 'gyro_bias[0]',
+            'mhe_bgy_rad_s': 'gyro_bias[1]',
+            'mhe_bgz_rad_s': 'gyro_bias[2]',
+        }
+        for dst, src in bias_map.items():
+            if src in sensor_bias:
+                df[dst] = _interp_to_sim_time(sim_t, bias_t, sensor_bias[src])
+
+    estimator_states = gnc.get('_estimator_states')
+    if estimator_states and 't' in estimator_states:
+        est_t = np.asarray(estimator_states['t'], dtype=float)
+        wind_map = {
+            'mhe_wn_m_s': 'states[22]',
+            'mhe_we_m_s': 'states[23]',
+        }
+        for dst, src in wind_map.items():
+            if src in estimator_states:
+                df[dst] = _interp_to_sim_time(sim_t, est_t, estimator_states[src])
+
+    _refresh_reference_flags(df)
+    return df
+
+
+def _find_ulg(px4_bin: str = '', min_mtime: float = 0.0) -> str:
+    """Auto-detect the most recent ULG log for the current run when possible."""
     candidates = []
     roots = [
         Path('/home/wd/Desktop/gab_2/q_2/2/m13/AndroidApp/app/src/main/cpp/'
@@ -368,6 +529,10 @@ def _find_ulg(px4_bin: str = '') -> str:
             candidates.extend(r.rglob('*.ulg'))
     if not candidates:
         return ''
+    if min_mtime > 0.0:
+        recent_candidates = [f for f in candidates if f.stat().st_mtime >= min_mtime]
+        if recent_candidates:
+            candidates = recent_candidates
     candidates.sort(key=lambda f: f.stat().st_mtime, reverse=True)
     return str(candidates[0])
 
@@ -577,10 +742,16 @@ def generate_sitl_html_report(csv_path, html_path=None, ulg_path=None,
                                px4_log_path=None, metadata=None, auto_open=False):
     csv_path = Path(csv_path)
     if html_path is None:
-        html_path = csv_path.parent / (csv_path.stem + '_report.html')
+        html_path = csv_path.parent / 'plots' / f'analysis_{csv_path.stem}.html'
+    else:
+        html_path = Path(html_path)
 
     print(f'  Loading SITL CSV: {csv_path.name}')
     df = _load_sitl_csv(csv_path)
+
+    if ulg_path and Path(ulg_path).exists():
+        print(f'  Loading ULG: {Path(ulg_path).name}')
+        df = _merge_ulg_reference_fields(df, _load_ulg(str(ulg_path)))
 
     metrics = aa._extract_run_metrics(df, csv_path)
     scores  = aa._score_run(metrics)
@@ -591,39 +762,16 @@ def generate_sitl_html_report(csv_path, html_path=None, ulg_path=None,
     metrics['timestamp'] = csv_path.stem
 
     print('  Generating HTML (reference format)...')
-    html = aa.generate_html_report(df, metrics, scores, diags, recs, phases,
-                                    html_path=None)
-
-    # Fix title
-    html = html.replace('M130 6-DOF Simulation Analysis', 'M130 SITL Analysis')
-
-    # ── Inject MHE/MPC tab ────────────────────────────────────────────────────
-    gnc = {}
-    if ulg_path and Path(ulg_path).exists():
-        print(f'  Loading ULG: {Path(ulg_path).name}')
-        gnc = _load_ulg(str(ulg_path))
-
-    mhe_html = _build_mhe_tab_html(gnc, df)
-
-    # Button injection: tabs bar ends with ...>[last button]</div><div id="tab-overview"
-    if '</div><div id="tab-overview"' in html:
-        html = html.replace(
-            '</div><div id="tab-overview"',
-            '<button class="tab-btn" onclick="openTab(event,\'tab-mhe\')">'
-            '🎯 MHE/MPC</button>'
-            '</div><div id="tab-overview"',
-            1)
-
-    # Panel injection: before the final </div></div> that closes the tab container
-    inject_marker = '</div></div>\n<script>'
-    if inject_marker in html:
-        html = html.replace(inject_marker,
-                            f'\n{mhe_html}\n</div></div>\n<script>', 1)
-    else:
-        html = html.replace('</div></div><script>',
-                            f'\n{mhe_html}\n</div></div><script>', 1)
-
-    Path(html_path).write_text(html, encoding='utf-8')
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    aa.generate_html_report(
+        df,
+        metrics,
+        scores,
+        diags,
+        recs,
+        phases,
+        html_path=str(html_path),
+    )
     print(f'  ✓ Report: {html_path}')
 
     if auto_open:

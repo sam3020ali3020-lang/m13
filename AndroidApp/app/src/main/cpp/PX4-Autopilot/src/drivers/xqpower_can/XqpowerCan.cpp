@@ -1308,6 +1308,40 @@ void XqpowerCan::Run()
 
 		dbg.data[12] = (float)online_mask;
 		dbg.data[13] = (float)_tx_fail_count;
+
+		/*
+		 * Per-servo feedback age (ms since last CAN frame for that servo).
+		 * Consumed by rocket_mpc (see RocketMPC.cpp feedback-only block)
+		 * to gate the SRV_FB back-solve on CAN_FRESH_US=120 ms.  Online
+		 * mask alone is not enough — a servo can be marked online (its
+		 * 2-second online timeout has not elapsed) while its last
+		 * position update is already 200 ms old, which would let a stale
+		 * value drive _de_act. We publish a clamped millisecond counter:
+		 *   - 0 when last_update_us == 0 (no frame yet received) or in the
+		 *     future relative to now (clock skew guard).
+		 *   - capped at UINT16_MAX ms to fit a float with full resolution.
+		 */
+		const hrt_abstime fb_now = dbg.timestamp;
+
+		for (int i = 0; i < XQPOWER_MAX_SERVOS; i++) {
+			uint32_t age_ms = 0;
+
+			if (_feedback[i].last_update_us != 0
+			    && fb_now >= _feedback[i].last_update_us) {
+				const hrt_abstime age_us = fb_now - _feedback[i].last_update_us;
+				uint64_t age_ms_u64 = age_us / 1000ULL;
+
+				if (age_ms_u64 > 65535ULL) { age_ms_u64 = 65535ULL; }
+
+				age_ms = (uint32_t)age_ms_u64;
+			} else {
+				/* No frame yet — mark stale-to-consumer with max age. */
+				age_ms = 65535u;
+			}
+
+			dbg.data[14 + i] = (float)age_ms;
+		}
+
 		_servo_fb_pub.publish(dbg);
 	}
 
